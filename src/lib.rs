@@ -166,13 +166,17 @@ fn serialize_result(
         let rep_dict = PyDict::new(py);
 
         let source_dict = PyDict::new(py);
-        source_dict.set_item("id", replacement.source_id)?;
-        source_dict.set_item("name", &replacement.source_name)?;
+        source_dict.set_item("id", replacement.source.id)?;
+        source_dict.set_item("name", &replacement.source.name)?;
+        source_dict.set_item("description", &replacement.source.description)?;
+        source_dict.set_item("grade", replacement.source.grade)?;
         rep_dict.set_item("source", source_dict)?;
 
         let target_dict = PyDict::new(py);
-        target_dict.set_item("id", replacement.target_id)?;
-        target_dict.set_item("name", &replacement.target_name)?;
+        target_dict.set_item("id", replacement.target.id)?;
+        target_dict.set_item("name", &replacement.target.name)?;
+        target_dict.set_item("description", &replacement.target.description)?;
+        target_dict.set_item("grade", replacement.target.grade)?;
         rep_dict.set_item("target", target_dict)?;
 
         replacements_list.append(rep_dict)?;

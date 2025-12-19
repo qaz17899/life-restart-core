@@ -4,13 +4,20 @@ use crate::config::TalentConfig;
 use crate::event::selector::weighted_random;
 use std::collections::HashMap;
 
+/// Talent info for replacement result
+#[derive(Debug, Clone)]
+pub struct ReplacementTalentInfo {
+    pub id: i32,
+    pub name: String,
+    pub description: String,
+    pub grade: i32,
+}
+
 /// Result of a talent replacement
 #[derive(Debug, Clone)]
 pub struct ReplacementResult {
-    pub source_id: i32,
-    pub source_name: String,
-    pub target_id: i32,
-    pub target_name: String,
+    pub source: ReplacementTalentInfo,
+    pub target: ReplacementTalentInfo,
 }
 
 /// Apply talent replacements
@@ -27,10 +34,18 @@ pub fn apply_replacements(
             if let (Some(source), Some(target)) = (talents.get(&talent_id), talents.get(&replaced_id))
             {
                 replacements.push(ReplacementResult {
-                    source_id: talent_id,
-                    source_name: source.name.clone(),
-                    target_id: replaced_id,
-                    target_name: target.name.clone(),
+                    source: ReplacementTalentInfo {
+                        id: talent_id,
+                        name: source.name.clone(),
+                        description: source.description.clone(),
+                        grade: source.grade,
+                    },
+                    target: ReplacementTalentInfo {
+                        id: replaced_id,
+                        name: target.name.clone(),
+                        description: target.description.clone(),
+                        grade: target.grade,
+                    },
                 });
             }
             new_talents[i] = replaced_id;
