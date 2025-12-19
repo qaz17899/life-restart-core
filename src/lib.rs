@@ -16,37 +16,79 @@ pub mod talent;
 
 use crate::error::LifeRestartError;
 use crate::simulator::SimulationEngine;
+use once_cell::sync::OnceCell;
+use parking_lot::RwLock;
 use pyo3::types::{PyAny, PyDict, PyDictMethods, PyList, PyListMethods, PySet, PySetMethods};
 use pyo3::Py;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
-/// Simulate a complete life trajectory
+/// Global cached simulation engine
+static CACHED_ENGINE: OnceCell<Arc<RwLock<SimulationEngine>>> = OnceCell::new();
+
+/// Initialize the game configuration (call once at startup)
+///
+/// This caches the configuration in Rust memory, eliminating the need to
+/// deserialize it on every simulation call. Call this once when your bot starts.
 ///
 /// # Arguments
-/// * `talent_ids` - List of selected talent IDs
-/// * `properties` - Initial property allocation {CHR, INT, STR, MNY}
-/// * `achieved_ids` - Set of already achieved achievement IDs
 /// * `config` - Game configuration containing talents, events, ages, achievements
-///
-/// # Returns
-/// A dictionary containing trajectory, summary, new_achievements, triggered_events, and replacements
 #[pyfunction]
-fn simulate_full_life(
-    py: Python<'_>,
-    talent_ids: Vec<i32>,
-    properties: &Bound<'_, PyDict>,
-    achieved_ids: &Bound<'_, PySet>,
-    config: &Bound<'_, PyDict>,
-) -> PyResult<Py<PyAny>> {
-    // Deserialize config
+fn init_config(config: &Bound<'_, PyDict>) -> PyResult<()> {
     let talents = config::deserialize_talents(config)?;
     let events = config::deserialize_events(config)?;
     let ages = config::deserialize_ages(config)?;
     let achievements = config::deserialize_achievements(config)?;
     let judge_config = config::deserialize_judge_config(config)?;
 
-    // Create simulation engine
     let engine = SimulationEngine::new(talents, events, ages, achievements, judge_config);
+
+    // If already initialized, update the engine
+    if let Some(cached) = CACHED_ENGINE.get() {
+        let mut guard = cached.write();
+        *guard = engine;
+    } else {
+        let _ = CACHED_ENGINE.set(Arc::new(RwLock::new(engine)));
+    }
+
+    Ok(())
+}
+
+/// Check if config is initialized
+#[pyfunction]
+fn is_config_initialized() -> bool {
+    CACHED_ENGINE.get().is_some()
+}
+
+/// Simulate a complete life trajectory (fast version using cached config)
+///
+/// # Arguments
+/// * `talent_ids` - List of selected talent IDs
+/// * `properties` - Initial property allocation {CHR, INT, STR, MNY}
+/// * `achieved_ids` - Set of already achieved achievement IDs
+///
+/// # Returns
+/// A dictionary containing trajectory, summary, new_achievements, triggered_events, and replacements
+///
+/// # Panics
+/// Panics if `init_config` was not called first
+#[pyfunction]
+fn simulate_full_life(
+    py: Python<'_>,
+    talent_ids: Vec<i32>,
+    properties: &Bound<'_, PyDict>,
+    achieved_ids: &Bound<'_, PySet>,
+) -> PyResult<Py<PyAny>> {
+    // Get cached engine
+    let engine_arc = CACHED_ENGINE
+        .get()
+        .ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "Config not initialized. Call init_config() first.",
+            )
+        })?;
+
+    let engine = engine_arc.read();
 
     // Deserialize input
     let props = deserialize_properties(properties)?;
@@ -58,6 +100,39 @@ fn simulate_full_life(
         .map_err(|e| LifeRestartError::from(e))?;
 
     // Serialize result to Python dict
+    serialize_result(py, &result)
+}
+
+/// Simulate with explicit config (slower, for backwards compatibility or dynamic config)
+///
+/// Use this if you need to use different configs for different simulations.
+/// For most cases, use `init_config` + `simulate_full_life` instead.
+#[pyfunction]
+fn simulate_with_config(
+    py: Python<'_>,
+    talent_ids: Vec<i32>,
+    properties: &Bound<'_, PyDict>,
+    achieved_ids: &Bound<'_, PySet>,
+    config: &Bound<'_, PyDict>,
+) -> PyResult<Py<PyAny>> {
+    // Deserialize config every time (slower)
+    let talents = config::deserialize_talents(config)?;
+    let events = config::deserialize_events(config)?;
+    let ages = config::deserialize_ages(config)?;
+    let achievements = config::deserialize_achievements(config)?;
+    let judge_config = config::deserialize_judge_config(config)?;
+
+    let engine = SimulationEngine::new(talents, events, ages, achievements, judge_config);
+
+    // Deserialize input
+    let props = deserialize_properties(properties)?;
+    let achieved = deserialize_achieved_ids(achieved_ids)?;
+
+    // Run simulation
+    let result = engine
+        .simulate(&talent_ids, &props, &achieved)
+        .map_err(|e| LifeRestartError::from(e))?;
+
     serialize_result(py, &result)
 }
 
@@ -80,10 +155,7 @@ fn deserialize_achieved_ids(set: &Bound<'_, PySet>) -> PyResult<HashSet<i32>> {
     Ok(achieved)
 }
 
-fn serialize_result(
-    py: Python<'_>,
-    result: &simulator::SimulationResult,
-) -> PyResult<Py<PyAny>> {
+fn serialize_result(py: Python<'_>, result: &simulator::SimulationResult) -> PyResult<Py<PyAny>> {
     let dict = PyDict::new(py);
 
     // Serialize trajectory
@@ -189,6 +261,9 @@ fn serialize_result(
 /// Python module definition
 #[pymodule]
 fn life_restart_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(init_config, m)?)?;
+    m.add_function(wrap_pyfunction!(is_config_initialized, m)?)?;
     m.add_function(wrap_pyfunction!(simulate_full_life, m)?)?;
+    m.add_function(wrap_pyfunction!(simulate_with_config, m)?)?;
     Ok(())
 }
