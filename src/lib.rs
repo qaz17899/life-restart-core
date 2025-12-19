@@ -16,16 +16,16 @@ pub mod talent;
 
 use crate::error::LifeRestartError;
 use crate::simulator::SimulationEngine;
-use pyo3::types::{PyAny, PyDict, PyDictMethods, PyList, PyListMethods};
+use pyo3::types::{PyAny, PyDict, PyDictMethods, PyList, PyListMethods, PySet, PySetMethods};
 use pyo3::Py;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Simulate a complete life trajectory
 ///
 /// # Arguments
 /// * `talent_ids` - List of selected talent IDs
 /// * `properties` - Initial property allocation {CHR, INT, STR, MNY}
-/// * `achieved_list` - List of already achieved achievement IDs
+/// * `achieved_ids` - Set of already achieved achievement IDs
 /// * `config` - Game configuration containing talents, events, ages, achievements
 ///
 /// # Returns
@@ -35,7 +35,7 @@ fn simulate_full_life(
     py: Python<'_>,
     talent_ids: Vec<i32>,
     properties: &Bound<'_, PyDict>,
-    achieved_list: &Bound<'_, PyList>,
+    achieved_ids: &Bound<'_, PySet>,
     config: &Bound<'_, PyDict>,
 ) -> PyResult<Py<PyAny>> {
     // Deserialize config
@@ -50,7 +50,7 @@ fn simulate_full_life(
 
     // Deserialize input
     let props = deserialize_properties(properties)?;
-    let achieved = deserialize_achieved_list(achieved_list)?;
+    let achieved = deserialize_achieved_ids(achieved_ids)?;
 
     // Run simulation
     let result = engine
@@ -71,11 +71,11 @@ fn deserialize_properties(dict: &Bound<'_, PyDict>) -> PyResult<HashMap<String, 
     Ok(props)
 }
 
-fn deserialize_achieved_list(list: &Bound<'_, PyList>) -> PyResult<Vec<Vec<i32>>> {
-    let mut achieved = Vec::new();
-    for item in list.iter() {
-        let inner: Vec<i32> = item.extract()?;
-        achieved.push(inner);
+fn deserialize_achieved_ids(set: &Bound<'_, PySet>) -> PyResult<HashSet<i32>> {
+    let mut achieved = HashSet::new();
+    for item in set.iter() {
+        let id: i32 = item.extract()?;
+        achieved.insert(id);
     }
     Ok(achieved)
 }

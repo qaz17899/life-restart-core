@@ -3,7 +3,7 @@
 use crate::condition::cache::check_condition;
 use crate::config::{AchievementConfig, Opportunity};
 use crate::property::PropertyState;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Achievement info for results
 #[derive(Debug, Clone)]
@@ -18,7 +18,7 @@ pub struct AchievementInfo {
 pub fn check_achievements(
     opportunity: Opportunity,
     state: &PropertyState,
-    achieved: &[Vec<i32>],
+    achieved: &HashSet<i32>,
     achievements: &HashMap<i32, AchievementConfig>,
 ) -> Vec<AchievementInfo> {
     let mut new_achievements = Vec::new();
@@ -30,8 +30,8 @@ pub fn check_achievements(
             continue;
         }
 
-        // Check if already achieved
-        if is_achieved(achievement.id, achieved) {
+        // Check if already achieved (O(1) lookup with HashSet)
+        if achieved.contains(&achievement.id) {
             continue;
         }
 
@@ -49,28 +49,9 @@ pub fn check_achievements(
     new_achievements
 }
 
-/// Check if an achievement is already achieved
-fn is_achieved(achievement_id: i32, achieved: &[Vec<i32>]) -> bool {
-    for group in achieved {
-        if group.contains(&achievement_id) {
-            return true;
-        }
-    }
-    false
-}
-
-/// Unlock an achievement (add to achieved list)
-pub fn unlock_achievement(achievement_id: i32, achieved: &[Vec<i32>]) -> Vec<Vec<i32>> {
-    let mut new_achieved = achieved.to_vec();
-
-    // Add to the first group or create a new group
-    if new_achieved.is_empty() {
-        new_achieved.push(vec![achievement_id]);
-    } else {
-        new_achieved[0].push(achievement_id);
-    }
-
-    new_achieved
+/// Unlock an achievement (add to achieved set)
+pub fn unlock_achievement(achievement_id: i32, achieved: &mut HashSet<i32>) {
+    achieved.insert(achievement_id);
 }
 
 #[cfg(test)]
@@ -79,19 +60,20 @@ mod tests {
 
     #[test]
     fn test_is_achieved() {
-        let achieved = vec![vec![1, 2, 3], vec![4, 5]];
+        let achieved: HashSet<i32> = [1, 2, 3, 4, 5].into_iter().collect();
 
-        assert!(is_achieved(1, &achieved));
-        assert!(is_achieved(5, &achieved));
-        assert!(!is_achieved(6, &achieved));
+        assert!(achieved.contains(&1));
+        assert!(achieved.contains(&5));
+        assert!(!achieved.contains(&6));
     }
 
     #[test]
     fn test_unlock_achievement() {
-        let achieved = vec![vec![1, 2]];
-        let new_achieved = unlock_achievement(3, &achieved);
+        let mut achieved: HashSet<i32> = [1, 2].into_iter().collect();
+        unlock_achievement(3, &mut achieved);
 
-        assert_eq!(new_achieved, vec![vec![1, 2, 3]]);
+        assert!(achieved.contains(&3));
+        assert_eq!(achieved.len(), 3);
     }
 
     #[test]
@@ -113,7 +95,7 @@ mod tests {
             chr: 10,
             ..Default::default()
         };
-        let achieved: Vec<Vec<i32>> = vec![];
+        let achieved: HashSet<i32> = HashSet::new();
 
         let new_achievements =
             check_achievements(Opportunity::Start, &state, &achieved, &achievements);

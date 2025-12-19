@@ -10,7 +10,7 @@ use crate::property::PropertyState;
 use crate::talent::{
     apply_replacements, apply_talent_effect, process_talents, ReplacementResult,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Content type constants
 pub const CONTENT_TYPE_TALENT: &str = "TLT";
@@ -102,7 +102,7 @@ impl SimulationEngine {
         &self,
         talent_ids: &[i32],
         properties: &HashMap<String, i32>,
-        achieved_list: &[Vec<i32>],
+        achieved_ids: &HashSet<i32>,
     ) -> Result<SimulationResult> {
         // Apply talent replacements
         let (final_talents, replacements) = apply_replacements(talent_ids, &self.talents);
@@ -130,7 +130,7 @@ impl SimulationEngine {
 
         // Track achievements
         let mut all_new_achievements: Vec<AchievementInfo> = Vec::new();
-        let mut current_achieved = achieved_list.to_vec();
+        let mut current_achieved = achieved_ids.clone();
 
         // Check START achievements
         let start_achievements = check_achievements(
@@ -140,7 +140,7 @@ impl SimulationEngine {
             &self.achievements,
         );
         for achievement in start_achievements {
-            current_achieved = unlock_achievement(achievement.id, &current_achieved);
+            unlock_achievement(achievement.id, &mut current_achieved);
             all_new_achievements.push(achievement);
         }
 
@@ -159,7 +159,7 @@ impl SimulationEngine {
                 &self.achievements,
             );
             for achievement in traj_achievements {
-                current_achieved = unlock_achievement(achievement.id, &current_achieved);
+                unlock_achievement(achievement.id, &mut current_achieved);
                 all_new_achievements.push(achievement);
             }
 

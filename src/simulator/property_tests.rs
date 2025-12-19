@@ -5,7 +5,7 @@
 //! Validates: Requirements 6.3
 
 use proptest::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::config::{AgeConfig, EventConfig, EventEffect, TalentConfig};
 use crate::simulator::SimulationEngine;
@@ -144,7 +144,7 @@ proptest! {
     ) {
         let engine = create_test_engine();
         let talent_ids = vec![1];
-        let achieved: Vec<Vec<i32>> = vec![];
+        let achieved: HashSet<i32> = HashSet::new();
 
         let result = engine.simulate(&talent_ids, &properties, &achieved);
         prop_assert!(result.is_ok(), "Simulation should complete without error");
@@ -167,7 +167,7 @@ proptest! {
     ) {
         let engine = create_test_engine();
         let talent_ids = vec![1];
-        let achieved: Vec<Vec<i32>> = vec![];
+        let achieved: HashSet<i32> = HashSet::new();
 
         let result = engine.simulate(&talent_ids, &properties, &achieved).unwrap();
 
@@ -187,7 +187,7 @@ proptest! {
     ) {
         let engine = create_test_engine();
         let talent_ids = vec![1];
-        let achieved: Vec<Vec<i32>> = vec![];
+        let achieved: HashSet<i32> = HashSet::new();
 
         let result = engine.simulate(&talent_ids, &properties, &achieved).unwrap();
 
@@ -208,7 +208,7 @@ proptest! {
     ) {
         let engine = create_test_engine();
         let talent_ids = vec![1];
-        let achieved: Vec<Vec<i32>> = vec![];
+        let achieved: HashSet<i32> = HashSet::new();
 
         let result = engine.simulate(&talent_ids, &properties, &achieved).unwrap();
 
@@ -235,7 +235,7 @@ mod tests {
         properties.insert("MNY".to_string(), 5);
 
         let talent_ids = vec![1];
-        let achieved: Vec<Vec<i32>> = vec![];
+        let achieved: HashSet<i32> = HashSet::new();
 
         let result = engine.simulate(&talent_ids, &properties, &achieved);
         assert!(result.is_ok());
