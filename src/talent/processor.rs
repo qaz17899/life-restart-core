@@ -1,4 +1,4 @@
-//! Talent processing logic
+//! Talent processing logic - Optimized version
 
 use crate::condition::cache::check_condition;
 use crate::config::{TalentConfig, TalentEffect};
@@ -15,13 +15,15 @@ pub struct TalentTriggerResult {
     pub effect: Option<TalentEffect>,
 }
 
-/// Process talents for the current state
+/// Process talents for the current state - optimized version
+#[inline]
 pub fn process_talents(
     state: &PropertyState,
     talents: &HashMap<i32, TalentConfig>,
     trigger_counts: &mut HashMap<i32, i32>,
 ) -> Vec<TalentTriggerResult> {
-    let mut results = Vec::new();
+    // Pre-allocate with expected capacity
+    let mut results = Vec::with_capacity(state.tlt.len());
 
     for talent_id in &state.tlt {
         if let Some(talent) = talents.get(talent_id) {
@@ -54,28 +56,42 @@ pub fn process_talents(
     results
 }
 
-/// Apply talent effect to property state
+/// Apply talent effect to property state - optimized with direct field access
+#[inline]
 pub fn apply_talent_effect(state: &mut PropertyState, effect: &TalentEffect) {
+    // Direct field access is faster than string matching
     if effect.chr != 0 {
-        state.change("CHR", effect.chr);
+        state.chr += effect.chr;
+        state.lchr = state.lchr.min(state.chr);
+        state.hchr = state.hchr.max(state.chr);
     }
     if effect.int != 0 {
-        state.change("INT", effect.int);
+        state.int += effect.int;
+        state.lint = state.lint.min(state.int);
+        state.hint = state.hint.max(state.int);
     }
     if effect.str_ != 0 {
-        state.change("STR", effect.str_);
+        state.str_ += effect.str_;
+        state.lstr = state.lstr.min(state.str_);
+        state.hstr = state.hstr.max(state.str_);
     }
     if effect.mny != 0 {
-        state.change("MNY", effect.mny);
+        state.mny += effect.mny;
+        state.lmny = state.lmny.min(state.mny);
+        state.hmny = state.hmny.max(state.mny);
     }
     if effect.spr != 0 {
-        state.change("SPR", effect.spr);
+        state.spr += effect.spr;
+        state.lspr = state.lspr.min(state.spr);
+        state.hspr = state.hspr.max(state.spr);
     }
     if effect.lif != 0 {
-        state.change("LIF", effect.lif);
+        state.lif += effect.lif;
     }
     if effect.age != 0 {
-        state.change("AGE", effect.age);
+        state.age += effect.age;
+        state.lage = state.lage.min(state.age);
+        state.hage = state.hage.max(state.age);
     }
     if effect.rdm != 0 {
         state.change("RDM", effect.rdm);

@@ -1,17 +1,20 @@
-//! Condition parsing cache
+//! Condition parsing cache - Optimized with faster hashing
 
 use crate::condition::ast::AstNode;
 use crate::condition::parser;
 use crate::error::Result;
+use ahash::AHashMap;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
-use std::collections::HashMap;
 
-/// Global condition cache
-static CONDITION_CACHE: Lazy<RwLock<HashMap<String, AstNode>>> =
-    Lazy::new(|| RwLock::new(HashMap::with_capacity(2048)));
+/// Global condition cache with fast hashing (ahash)
+static CONDITION_CACHE: Lazy<RwLock<AHashMap<String, AstNode>>> = Lazy::new(|| {
+    let map = AHashMap::with_capacity(2048);
+    RwLock::new(map)
+});
 
 /// Get or parse a condition string, using cache for repeated conditions
+#[inline]
 pub fn get_or_parse(condition: &str) -> Result<AstNode> {
     // Fast path: check read lock first
     {
@@ -33,6 +36,7 @@ pub fn get_or_parse(condition: &str) -> Result<AstNode> {
 }
 
 /// Check a condition against a PropertyState, using cached AST
+#[inline]
 pub fn check_condition(condition: &str, state: &crate::property::PropertyState) -> Result<bool> {
     if condition.is_empty() {
         return Ok(true);

@@ -1,4 +1,4 @@
-//! Main simulation engine
+//! Main simulation engine - Optimized version
 
 use crate::achievement::{check_achievements, unlock_achievement, AchievementInfo};
 use crate::config::{
@@ -81,6 +81,7 @@ pub struct SimulationEngine {
 }
 
 impl SimulationEngine {
+    #[inline]
     pub fn new(
         talents: HashMap<i32, TalentConfig>,
         events: HashMap<i32, EventConfig>,
@@ -97,7 +98,7 @@ impl SimulationEngine {
         }
     }
 
-    /// Run the complete life simulation
+    /// Run the complete life simulation - optimized version
     pub fn simulate(
         &self,
         talent_ids: &[i32],
@@ -117,19 +118,19 @@ impl SimulationEngine {
             1, // Default LIF
         );
 
-        // Set talents
+        // Set talents - direct push without contains check (talents are unique)
         for talent_id in &final_talents {
             state.tlt.push(*talent_id);
         }
 
-        // Talent trigger counts
-        let mut trigger_counts: HashMap<i32, i32> = HashMap::new();
+        // Talent trigger counts - pre-allocate
+        let mut trigger_counts: HashMap<i32, i32> = HashMap::with_capacity(final_talents.len());
 
         // Apply initial talent effects
         self.do_talents(&mut state, &mut trigger_counts);
 
         // Track achievements
-        let mut all_new_achievements: Vec<AchievementInfo> = Vec::new();
+        let mut all_new_achievements: Vec<AchievementInfo> = Vec::with_capacity(16);
         let mut current_achieved = achieved_ids.clone();
 
         // Check START achievements
@@ -144,12 +145,13 @@ impl SimulationEngine {
             all_new_achievements.push(achievement);
         }
 
-        // Simulate life trajectory
-        let mut trajectory: Vec<TrajectoryEntry> = Vec::new();
+        // Simulate life trajectory - pre-allocate for typical lifespan
+        let mut trajectory: Vec<TrajectoryEntry> = Vec::with_capacity(120);
 
         while !state.is_end() {
             let year_result = self.simulate_year(&mut state, &mut trigger_counts);
-            trajectory.push(year_result.clone());
+            let is_end = year_result.is_end;
+            trajectory.push(year_result);
 
             // Check TRAJECTORY achievements
             let traj_achievements = check_achievements(
@@ -163,7 +165,7 @@ impl SimulationEngine {
                 all_new_achievements.push(achievement);
             }
 
-            if year_result.is_end {
+            if is_end {
                 break;
             }
         }
@@ -210,16 +212,20 @@ impl SimulationEngine {
         })
     }
 
+    #[inline]
     fn simulate_year(
         &self,
         state: &mut PropertyState,
         trigger_counts: &mut HashMap<i32, i32>,
     ) -> TrajectoryEntry {
-        // Advance age
-        state.change("AGE", 1);
+        // Advance age - direct field access
+        state.age += 1;
+        state.lage = state.lage.min(state.age);
+        state.hage = state.hage.max(state.age);
         let age = state.age;
 
-        let mut content: Vec<YearContent> = Vec::new();
+        // Pre-allocate content
+        let mut content: Vec<YearContent> = Vec::with_capacity(8);
 
         // Get age config
         if let Some(age_config) = self.ages.get(&age) {
@@ -257,13 +263,14 @@ impl SimulationEngine {
         }
     }
 
+    #[inline]
     fn do_talents(
         &self,
         state: &mut PropertyState,
         trigger_counts: &mut HashMap<i32, i32>,
     ) -> Vec<YearContent> {
         let results = process_talents(state, &self.talents, trigger_counts);
-        let mut content = Vec::new();
+        let mut content = Vec::with_capacity(results.len());
 
         for result in results {
             content.push(YearContent {
@@ -281,8 +288,9 @@ impl SimulationEngine {
         content
     }
 
+    #[inline]
     fn do_events(&self, state: &mut PropertyState, event_pool: &[(i32, f64)]) -> Vec<YearContent> {
-        let mut content = Vec::new();
+        let mut content = Vec::with_capacity(4);
 
         if let Some(event_id) = select_event(event_pool, &self.events, state) {
             self.process_event_chain(state, event_id, &mut content);
@@ -304,10 +312,11 @@ impl SimulationEngine {
             }
 
             // Build description
-            let mut description = result.description;
-            if let Some(ref post) = result.post_event {
-                description = format!("{}{}", description, post);
-            }
+            let description = if let Some(ref post) = result.post_event {
+                format!("{}{}", result.description, post)
+            } else {
+                result.description
+            };
 
             content.push(YearContent {
                 content_type: CONTENT_TYPE_EVENT.to_string(),
@@ -316,7 +325,7 @@ impl SimulationEngine {
                 name: None,
             });
 
-            // Apply effect
+            // Apply effect - optimized direct field access
             if let Some(ref effect) = result.effect {
                 apply_event_effect(state, effect);
             }
@@ -328,8 +337,9 @@ impl SimulationEngine {
         }
     }
 
+    #[inline]
     fn get_summary_judges(&self, state: &PropertyState) -> Vec<PropertyJudge> {
-        let mut judges = Vec::new();
+        let mut judges = Vec::with_capacity(7);
 
         let props = [
             ("HCHR", state.hchr.max(state.chr)),
@@ -355,6 +365,7 @@ impl SimulationEngine {
         judges
     }
 
+    #[inline]
     fn judge_property(&self, prop: &str, value: i32) -> Option<PropertyJudge> {
         let levels = self.judge_config.get(prop)?;
 
@@ -376,27 +387,41 @@ impl SimulationEngine {
     }
 }
 
+/// Apply event effect - optimized with direct field access
+#[inline]
 fn apply_event_effect(state: &mut PropertyState, effect: &EventEffect) {
     if effect.chr != 0 {
-        state.change("CHR", effect.chr);
+        state.chr += effect.chr;
+        state.lchr = state.lchr.min(state.chr);
+        state.hchr = state.hchr.max(state.chr);
     }
     if effect.int != 0 {
-        state.change("INT", effect.int);
+        state.int += effect.int;
+        state.lint = state.lint.min(state.int);
+        state.hint = state.hint.max(state.int);
     }
     if effect.str_ != 0 {
-        state.change("STR", effect.str_);
+        state.str_ += effect.str_;
+        state.lstr = state.lstr.min(state.str_);
+        state.hstr = state.hstr.max(state.str_);
     }
     if effect.mny != 0 {
-        state.change("MNY", effect.mny);
+        state.mny += effect.mny;
+        state.lmny = state.lmny.min(state.mny);
+        state.hmny = state.hmny.max(state.mny);
     }
     if effect.spr != 0 {
-        state.change("SPR", effect.spr);
+        state.spr += effect.spr;
+        state.lspr = state.lspr.min(state.spr);
+        state.hspr = state.hspr.max(state.spr);
     }
     if effect.lif != 0 {
-        state.change("LIF", effect.lif);
+        state.lif += effect.lif;
     }
     if effect.age != 0 {
-        state.change("AGE", effect.age);
+        state.age += effect.age;
+        state.lage = state.lage.min(state.age);
+        state.hage = state.hage.max(state.age);
     }
     if effect.rdm != 0 {
         state.change("RDM", effect.rdm);

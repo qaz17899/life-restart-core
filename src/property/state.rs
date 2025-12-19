@@ -1,4 +1,4 @@
-//! Property state structure and operations
+//! Property state structure and operations - Optimized version
 
 use rand::seq::SliceRandom;
 
@@ -17,9 +17,9 @@ pub struct PropertyState {
     pub spr: i32,  // 快樂 (Spirit)
     pub lif: i32,  // 生命 (Life)
 
-    // List properties
-    pub tlt: Vec<i32>, // 天賦列表 (Talents)
-    pub evt: Vec<i32>, // 事件列表 (Events)
+    // List properties - pre-allocated with reasonable capacity
+    pub tlt: Vec<i32>, // 天賦列表 (Talents) - typically 3-10 items
+    pub evt: Vec<i32>, // 事件列表 (Events) - typically 50-200 items
 
     // Minimum value tracking
     pub lage: i32,
@@ -40,6 +40,7 @@ pub struct PropertyState {
 
 impl PropertyState {
     /// Create a new PropertyState with initial values
+    #[inline]
     pub fn new(chr: i32, int: i32, str_: i32, mny: i32, spr: i32, lif: i32) -> Self {
         let mut state = Self {
             age: -1,
@@ -49,8 +50,9 @@ impl PropertyState {
             mny,
             spr,
             lif,
-            tlt: Vec::new(),
-            evt: Vec::new(),
+            // Pre-allocate with typical capacities to avoid reallocations
+            tlt: Vec::with_capacity(10),
+            evt: Vec::with_capacity(128),
             // Initialize min/max to extreme values
             lage: i32::MAX,
             lchr: i32::MAX,
@@ -72,6 +74,7 @@ impl PropertyState {
     }
 
     /// Initialize min/max tracking with current values
+    #[inline]
     fn init_min_max(&mut self) {
         self.lage = self.age;
         self.lchr = self.chr;
@@ -88,47 +91,51 @@ impl PropertyState {
         self.hspr = self.spr;
     }
 
-    /// Change a property value by delta
+    /// Change a property value by delta - optimized with byte comparison
+    #[inline]
     pub fn change(&mut self, prop: &str, delta: i32) {
-        match prop {
-            "AGE" => {
+        // Use byte comparison for faster matching
+        match prop.as_bytes() {
+            b"AGE" => {
                 self.age += delta;
-                self.update_min_max("AGE");
+                self.update_age_min_max();
             }
-            "CHR" => {
+            b"CHR" => {
                 self.chr += delta;
-                self.update_min_max("CHR");
+                self.update_chr_min_max();
             }
-            "INT" => {
+            b"INT" => {
                 self.int += delta;
-                self.update_min_max("INT");
+                self.update_int_min_max();
             }
-            "STR" => {
+            b"STR" => {
                 self.str_ += delta;
-                self.update_min_max("STR");
+                self.update_str_min_max();
             }
-            "MNY" => {
+            b"MNY" => {
                 self.mny += delta;
-                self.update_min_max("MNY");
+                self.update_mny_min_max();
             }
-            "SPR" => {
+            b"SPR" => {
                 self.spr += delta;
-                self.update_min_max("SPR");
+                self.update_spr_min_max();
             }
-            "LIF" => {
+            b"LIF" => {
                 self.lif += delta;
             }
-            "TLT" => {
+            b"TLT" => {
+                // Linear search is fine for small lists (typically < 10 items)
                 if !self.tlt.contains(&delta) {
                     self.tlt.push(delta);
                 }
             }
-            "EVT" => {
+            b"EVT" => {
+                // Linear search - could be optimized with HashSet for large lists
                 if !self.evt.contains(&delta) {
                     self.evt.push(delta);
                 }
             }
-            "RDM" => {
+            b"RDM" => {
                 // Random property
                 let mut rng = rand::thread_rng();
                 if let Some(random_prop) = RDM_PROPERTIES.choose(&mut rng) {
@@ -139,44 +146,52 @@ impl PropertyState {
         }
     }
 
-    /// Update min/max tracking for a property
-    fn update_min_max(&mut self, prop: &str) {
-        match prop {
-            "AGE" => {
-                self.lage = self.lage.min(self.age);
-                self.hage = self.hage.max(self.age);
-            }
-            "CHR" => {
-                self.lchr = self.lchr.min(self.chr);
-                self.hchr = self.hchr.max(self.chr);
-            }
-            "INT" => {
-                self.lint = self.lint.min(self.int);
-                self.hint = self.hint.max(self.int);
-            }
-            "STR" => {
-                self.lstr = self.lstr.min(self.str_);
-                self.hstr = self.hstr.max(self.str_);
-            }
-            "MNY" => {
-                self.lmny = self.lmny.min(self.mny);
-                self.hmny = self.hmny.max(self.mny);
-            }
-            "SPR" => {
-                self.lspr = self.lspr.min(self.spr);
-                self.hspr = self.hspr.max(self.spr);
-            }
-            _ => {}
-        }
+    /// Specialized min/max update functions - inlined for performance
+    #[inline(always)]
+    fn update_age_min_max(&mut self) {
+        self.lage = self.lage.min(self.age);
+        self.hage = self.hage.max(self.age);
+    }
+
+    #[inline(always)]
+    fn update_chr_min_max(&mut self) {
+        self.lchr = self.lchr.min(self.chr);
+        self.hchr = self.hchr.max(self.chr);
+    }
+
+    #[inline(always)]
+    fn update_int_min_max(&mut self) {
+        self.lint = self.lint.min(self.int);
+        self.hint = self.hint.max(self.int);
+    }
+
+    #[inline(always)]
+    fn update_str_min_max(&mut self) {
+        self.lstr = self.lstr.min(self.str_);
+        self.hstr = self.hstr.max(self.str_);
+    }
+
+    #[inline(always)]
+    fn update_mny_min_max(&mut self) {
+        self.lmny = self.lmny.min(self.mny);
+        self.hmny = self.hmny.max(self.mny);
+    }
+
+    #[inline(always)]
+    fn update_spr_min_max(&mut self) {
+        self.lspr = self.lspr.min(self.spr);
+        self.hspr = self.hspr.max(self.spr);
     }
 
     /// Check if the game has ended (LIF < 1)
+    #[inline]
     pub fn is_end(&self) -> bool {
         self.lif < 1
     }
 
     /// Calculate summary score
     /// Formula: (HCHR + HINT + HSTR + HMNY + HSPR) * 2 + HAGE / 2
+    #[inline]
     pub fn calculate_summary_score(&self) -> i32 {
         let hchr = self.hchr.max(self.chr);
         let hint = self.hint.max(self.int);
@@ -189,8 +204,9 @@ impl PropertyState {
     }
 
     /// Get current properties as a HashMap
+    #[inline]
     pub fn get_properties_dict(&self) -> std::collections::HashMap<String, i32> {
-        let mut props = std::collections::HashMap::new();
+        let mut props = std::collections::HashMap::with_capacity(6);
         props.insert("AGE".to_string(), self.age);
         props.insert("CHR".to_string(), self.chr);
         props.insert("INT".to_string(), self.int);

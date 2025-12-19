@@ -1,4 +1,4 @@
-//! Event selection logic
+//! Event selection logic - Optimized version
 
 use crate::condition::cache::check_condition;
 use crate::config::EventConfig;
@@ -7,49 +7,64 @@ use rand::Rng;
 use std::collections::HashMap;
 
 /// Select an event from the event pool based on conditions and weights
+#[inline]
 pub fn select_event(
     event_pool: &[(i32, f64)],
     events: &HashMap<i32, EventConfig>,
     state: &PropertyState,
 ) -> Option<i32> {
-    // Filter available events
-    let available: Vec<(i32, f64)> = event_pool
-        .iter()
-        .filter_map(|(event_id, weight)| {
-            let event = events.get(event_id)?;
+    // Pre-allocate with expected capacity
+    let mut available: Vec<(i32, f64)> = Vec::with_capacity(event_pool.len());
+    let mut total_weight: f64 = 0.0;
 
+    // Single pass: filter and accumulate weight
+    for (event_id, weight) in event_pool {
+        if let Some(event) = events.get(event_id) {
             // NoRandom events don't participate in random selection
             if event.no_random {
-                return None;
+                continue;
             }
 
             // Check exclude condition
             if let Some(ref exclude) = event.exclude {
                 if check_condition(exclude, state).unwrap_or(false) {
-                    return None;
+                    continue;
                 }
             }
 
             // Check include condition
             if let Some(ref include) = event.include {
                 if !check_condition(include, state).unwrap_or(true) {
-                    return None;
+                    continue;
                 }
             }
 
-            Some((*event_id, *weight))
-        })
-        .collect();
+            available.push((*event_id, *weight));
+            total_weight += weight;
+        }
+    }
 
-    if available.is_empty() {
+    if available.is_empty() || total_weight <= 0.0 {
         return None;
     }
 
-    // Weighted random selection
-    weighted_random(&available)
+    // Weighted random selection - inline for performance
+    let mut rng = rand::thread_rng();
+    let mut random_value = rng.gen::<f64>() * total_weight;
+
+    for (id, weight) in &available {
+        random_value -= weight;
+        if random_value <= 0.0 {
+            return Some(*id);
+        }
+    }
+
+    // Fallback to last item
+    available.last().map(|(id, _)| *id)
 }
 
-/// Perform weighted random selection
+/// Perform weighted random selection - optimized version
+#[inline]
 pub fn weighted_random(items: &[(i32, f64)]) -> Option<i32> {
     if items.is_empty() {
         return None;

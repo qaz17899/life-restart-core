@@ -15,13 +15,14 @@ pub struct AchievementInfo {
 }
 
 /// Check achievements for a given opportunity
+#[inline]
 pub fn check_achievements(
     opportunity: Opportunity,
     state: &PropertyState,
     achieved: &HashSet<i32>,
     achievements: &HashMap<i32, AchievementConfig>,
 ) -> Vec<AchievementInfo> {
-    let mut new_achievements = Vec::new();
+    let mut new_achievements = Vec::with_capacity(4);
 
     for achievement in achievements.values() {
         // Check opportunity matches
@@ -50,6 +51,7 @@ pub fn check_achievements(
 }
 
 /// Unlock an achievement (add to achieved set)
+#[inline]
 pub fn unlock_achievement(achievement_id: i32, achieved: &mut HashSet<i32>) {
     achieved.insert(achievement_id);
 }

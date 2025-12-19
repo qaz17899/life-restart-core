@@ -1,9 +1,10 @@
-//! Condition evaluator
+//! Condition evaluator - Zero-copy optimized version
 
 use crate::condition::ast::{AstNode, ConditionValue, Operator, SingleCondition};
 use crate::property::PropertyState;
 
 /// Evaluate an AST against a PropertyState
+#[inline]
 pub fn check(ast: &AstNode, state: &PropertyState) -> bool {
     match ast {
         AstNode::Single(cond) => check_single(cond, state),
@@ -12,19 +13,25 @@ pub fn check(ast: &AstNode, state: &PropertyState) -> bool {
     }
 }
 
+/// Check a single condition - optimized with zero-copy references
+#[inline]
 fn check_single(cond: &SingleCondition, state: &PropertyState) -> bool {
-    let prop_value = state.get(&cond.property);
+    let prop_value = state.get_value(&cond.property);
 
     match (&prop_value, &cond.value, cond.operator) {
-        // Integer comparisons
-        (PropertyValue::Integer(pv), ConditionValue::Integer(cv), Operator::Greater) => pv > cv,
-        (PropertyValue::Integer(pv), ConditionValue::Integer(cv), Operator::Less) => pv < cv,
+        // Integer comparisons - direct value comparison
+        (PropertyValue::Integer(pv), ConditionValue::Integer(cv), Operator::Greater) => *pv > *cv,
+        (PropertyValue::Integer(pv), ConditionValue::Integer(cv), Operator::Less) => *pv < *cv,
         (PropertyValue::Integer(pv), ConditionValue::Integer(cv), Operator::GreaterEqual) => {
-            pv >= cv
+            *pv >= *cv
         }
-        (PropertyValue::Integer(pv), ConditionValue::Integer(cv), Operator::LessEqual) => pv <= cv,
-        (PropertyValue::Integer(pv), ConditionValue::Integer(cv), Operator::Equal) => pv == cv,
-        (PropertyValue::Integer(pv), ConditionValue::Integer(cv), Operator::NotEqual) => pv != cv,
+        (PropertyValue::Integer(pv), ConditionValue::Integer(cv), Operator::LessEqual) => {
+            *pv <= *cv
+        }
+        (PropertyValue::Integer(pv), ConditionValue::Integer(cv), Operator::Equal) => *pv == *cv,
+        (PropertyValue::Integer(pv), ConditionValue::Integer(cv), Operator::NotEqual) => {
+            *pv != *cv
+        }
 
         // Float comparisons
         (PropertyValue::Integer(pv), ConditionValue::Float(cv), Operator::Greater) => {
@@ -40,7 +47,7 @@ fn check_single(cond: &SingleCondition, state: &PropertyState) -> bool {
             (*pv as f64) <= *cv
         }
 
-        // List contains value (=)
+        // List contains value (=) - zero-copy slice iteration
         (PropertyValue::List(list), ConditionValue::Integer(cv), Operator::Equal) => {
             list.contains(cv)
         }
@@ -49,7 +56,7 @@ fn check_single(cond: &SingleCondition, state: &PropertyState) -> bool {
             !list.contains(cv)
         }
 
-        // Includes any (?)
+        // Includes any (?) - optimized with early exit
         (PropertyValue::List(list), ConditionValue::Array(arr), Operator::IncludesAny) => {
             list.iter().any(|v| arr.contains(v))
         }
@@ -57,7 +64,7 @@ fn check_single(cond: &SingleCondition, state: &PropertyState) -> bool {
             arr.contains(pv)
         }
 
-        // Excludes all (!)
+        // Excludes all (!) - optimized with early exit
         (PropertyValue::List(list), ConditionValue::Array(arr), Operator::ExcludesAll) => {
             list.iter().all(|v| !arr.contains(v))
         }
@@ -70,42 +77,62 @@ fn check_single(cond: &SingleCondition, state: &PropertyState) -> bool {
     }
 }
 
-/// Property value types for evaluation
-#[derive(Debug, Clone)]
-pub enum PropertyValue {
+/// Property value types for evaluation - Zero-copy version using references
+#[derive(Debug)]
+pub enum PropertyValue<'a> {
     Integer(i32),
-    List(Vec<i32>),
+    List(&'a [i32]),
 }
 
 impl PropertyState {
-    /// Get property value for condition evaluation
-    pub fn get(&self, prop: &str) -> PropertyValue {
-        match prop {
-            "AGE" => PropertyValue::Integer(self.age),
-            "CHR" => PropertyValue::Integer(self.chr),
-            "INT" => PropertyValue::Integer(self.int),
-            "STR" => PropertyValue::Integer(self.str_),
-            "MNY" => PropertyValue::Integer(self.mny),
-            "SPR" => PropertyValue::Integer(self.spr),
-            "LIF" => PropertyValue::Integer(self.lif),
-            "TLT" => PropertyValue::List(self.tlt.clone()),
-            "EVT" => PropertyValue::List(self.evt.clone()),
-            "LAGE" => PropertyValue::Integer(self.lage.min(self.age)),
-            "LCHR" => PropertyValue::Integer(self.lchr.min(self.chr)),
-            "LINT" => PropertyValue::Integer(self.lint.min(self.int)),
-            "LSTR" => PropertyValue::Integer(self.lstr.min(self.str_)),
-            "LMNY" => PropertyValue::Integer(self.lmny.min(self.mny)),
-            "LSPR" => PropertyValue::Integer(self.lspr.min(self.spr)),
-            "HAGE" => PropertyValue::Integer(self.hage.max(self.age)),
-            "HCHR" => PropertyValue::Integer(self.hchr.max(self.chr)),
-            "HINT" => PropertyValue::Integer(self.hint.max(self.int)),
-            "HSTR" => PropertyValue::Integer(self.hstr.max(self.str_)),
-            "HMNY" => PropertyValue::Integer(self.hmny.max(self.mny)),
-            "HSPR" => PropertyValue::Integer(self.hspr.max(self.spr)),
-            "SUM" => PropertyValue::Integer(self.calculate_summary_score()),
+    /// Get property value for condition evaluation - Zero-copy version
+    #[inline]
+    pub fn get_value(&self, prop: &str) -> PropertyValue<'_> {
+        // Use byte comparison for common short property names (faster than string comparison)
+        let bytes = prop.as_bytes();
+        match bytes {
+            b"AGE" => PropertyValue::Integer(self.age),
+            b"CHR" => PropertyValue::Integer(self.chr),
+            b"INT" => PropertyValue::Integer(self.int),
+            b"STR" => PropertyValue::Integer(self.str_),
+            b"MNY" => PropertyValue::Integer(self.mny),
+            b"SPR" => PropertyValue::Integer(self.spr),
+            b"LIF" => PropertyValue::Integer(self.lif),
+            b"TLT" => PropertyValue::List(&self.tlt),
+            b"EVT" => PropertyValue::List(&self.evt),
+            b"LAGE" => PropertyValue::Integer(self.lage.min(self.age)),
+            b"LCHR" => PropertyValue::Integer(self.lchr.min(self.chr)),
+            b"LINT" => PropertyValue::Integer(self.lint.min(self.int)),
+            b"LSTR" => PropertyValue::Integer(self.lstr.min(self.str_)),
+            b"LMNY" => PropertyValue::Integer(self.lmny.min(self.mny)),
+            b"LSPR" => PropertyValue::Integer(self.lspr.min(self.spr)),
+            b"HAGE" => PropertyValue::Integer(self.hage.max(self.age)),
+            b"HCHR" => PropertyValue::Integer(self.hchr.max(self.chr)),
+            b"HINT" => PropertyValue::Integer(self.hint.max(self.int)),
+            b"HSTR" => PropertyValue::Integer(self.hstr.max(self.str_)),
+            b"HMNY" => PropertyValue::Integer(self.hmny.max(self.mny)),
+            b"HSPR" => PropertyValue::Integer(self.hspr.max(self.spr)),
+            b"SUM" => PropertyValue::Integer(self.calculate_summary_score()),
             _ => PropertyValue::Integer(0),
         }
     }
+
+    /// Legacy get method for backwards compatibility (with clone)
+    #[deprecated(note = "Use get_value() for zero-copy access")]
+    pub fn get(&self, prop: &str) -> PropertyValueOwned {
+        match self.get_value(prop) {
+            PropertyValue::Integer(v) => PropertyValueOwned::Integer(v),
+            PropertyValue::List(slice) => PropertyValueOwned::List(slice.to_vec()),
+        }
+    }
+}
+
+/// Owned property value for backwards compatibility
+#[derive(Debug, Clone)]
+#[deprecated(note = "Use PropertyValue<'a> for zero-copy access")]
+pub enum PropertyValueOwned {
+    Integer(i32),
+    List(Vec<i32>),
 }
 
 #[cfg(test)]

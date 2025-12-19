@@ -245,3 +245,121 @@ mod tests {
         assert!(result.trajectory.last().unwrap().is_end);
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Property 1: Return Type Consistency
+// Validates: Requirements 1.1, 5.4
+// ═══════════════════════════════════════════════════════════════════════════
+
+proptest! {
+    /// Property 1: simulate returns SimulationResult with consistent structure
+    /// Validates: Requirement 1.1 (Return Type)
+    #[test]
+    fn prop_simulation_returns_consistent_structure(
+        properties in initial_properties_strategy()
+    ) {
+        let engine = create_test_engine();
+        let talent_ids = vec![1];
+        let achieved: HashSet<i32> = HashSet::new();
+
+        let result = engine.simulate(&talent_ids, &properties, &achieved);
+        prop_assert!(result.is_ok(), "Simulation should return Ok");
+
+        let result = result.unwrap();
+
+        // Verify structure consistency
+        // 1. trajectory is a Vec<TrajectoryEntry>
+        prop_assert!(!result.trajectory.is_empty(), "Trajectory should not be empty");
+
+        // 2. Each trajectory entry has required fields
+        for entry in &result.trajectory {
+            prop_assert!(entry.age >= 0, "Age should be non-negative");
+            prop_assert!(!entry.content.is_empty() || entry.is_end, 
+                "Content should not be empty unless it's the end");
+        }
+
+        // 3. summary has required fields
+        prop_assert!(result.summary.total_score >= 0, "Total score should be non-negative");
+
+        // 4. new_achievements is a Vec (may be empty)
+        let _ = result.new_achievements.len();
+
+        // 5. triggered_events is a Vec (may be empty)
+        let _ = result.triggered_events.len();
+
+        // 6. replacements is a Vec (may be empty)
+        let _ = result.replacements.len();
+    }
+
+    /// Property 1.2: SimulationResult can be converted to GameSession
+    /// Validates: Requirement 5.4 (GameSession Creation)
+    #[test]
+    fn prop_simulation_result_to_game_session(
+        properties in initial_properties_strategy()
+    ) {
+        use crate::simulator::session::{GameSession, default_emoji_map};
+        use std::sync::Arc;
+
+        let engine = create_test_engine();
+        let talent_ids = vec![1];
+        let achieved: HashSet<i32> = HashSet::new();
+
+        let result = engine.simulate(&talent_ids, &properties, &achieved).unwrap();
+        let emoji_map = Arc::new(default_emoji_map());
+
+        // GameSession::new should not panic
+        let session = GameSession::new(result.clone(), emoji_map);
+
+        // Verify GameSession properties match SimulationResult
+        prop_assert_eq!(
+            session.trajectory_len(), 
+            result.trajectory.len(),
+            "GameSession trajectory length should match SimulationResult"
+        );
+
+        prop_assert_eq!(
+            session.summary_total_score(),
+            result.summary.total_score,
+            "GameSession total_score should match SimulationResult"
+        );
+    }
+
+    /// Property 1.3: GameSession pre-rendering preserves data integrity
+    /// Validates: Requirement 3.1 (Pre-rendering)
+    #[test]
+    fn prop_game_session_preserves_data(
+        properties in initial_properties_strategy()
+    ) {
+        use crate::simulator::session::{GameSession, default_emoji_map};
+        use std::sync::Arc;
+
+        let engine = create_test_engine();
+        let talent_ids = vec![1];
+        let achieved: HashSet<i32> = HashSet::new();
+
+        let result = engine.simulate(&talent_ids, &properties, &achieved).unwrap();
+        let emoji_map = Arc::new(default_emoji_map());
+        let session = GameSession::new(result.clone(), emoji_map);
+
+        // Verify each year's age is preserved
+        for (i, (rendered, original)) in session.trajectory_iter().zip(result.trajectory.iter()).enumerate() {
+            prop_assert_eq!(
+                rendered.age, 
+                original.age,
+                "Age mismatch at index {}", i
+            );
+            prop_assert_eq!(
+                rendered.is_end,
+                original.is_end,
+                "is_end mismatch at index {}", i
+            );
+        }
+
+        // Verify summary judges count is preserved
+        prop_assert_eq!(
+            session.summary_judges_len(),
+            result.summary.judges.len(),
+            "Judges count should be preserved"
+        );
+    }
+}

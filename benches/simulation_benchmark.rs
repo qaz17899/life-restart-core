@@ -182,7 +182,7 @@ fn benchmark_simulation(c: &mut Criterion) {
     properties.insert("INT".to_string(), 5);
     properties.insert("STR".to_string(), 5);
     properties.insert("MNY".to_string(), 5);
-    let achieved: Vec<Vec<i32>> = vec![];
+    let achieved: std::collections::HashSet<i32> = std::collections::HashSet::new();
 
     c.bench_function("simulate_full_life", |b| {
         b.iter(|| {
@@ -192,6 +192,45 @@ fn benchmark_simulation(c: &mut Criterion) {
                 black_box(&achieved),
             );
             black_box(result)
+        })
+    });
+}
+
+fn benchmark_game_session(c: &mut Criterion) {
+    use life_restart_core::simulator::{default_emoji_map, GameSession};
+    use std::sync::Arc;
+
+    let (talents, events, ages, achievements, judge_config) = create_test_config();
+    let engine = SimulationEngine::new(talents, events, ages, achievements, judge_config);
+
+    let talent_ids = vec![1, 2, 3];
+    let mut properties = HashMap::new();
+    properties.insert("CHR".to_string(), 5);
+    properties.insert("INT".to_string(), 5);
+    properties.insert("STR".to_string(), 5);
+    properties.insert("MNY".to_string(), 5);
+    let achieved: std::collections::HashSet<i32> = std::collections::HashSet::new();
+    let emoji_map = Arc::new(default_emoji_map());
+
+    // Benchmark simulation + GameSession creation (pre-rendering)
+    c.bench_function("simulate_with_game_session", |b| {
+        b.iter(|| {
+            let result = engine.simulate(
+                black_box(&talent_ids),
+                black_box(&properties),
+                black_box(&achieved),
+            ).unwrap();
+            let session = GameSession::new(result, emoji_map.clone());
+            black_box(session)
+        })
+    });
+
+    // Benchmark just GameSession creation (pre-rendering overhead)
+    let result = engine.simulate(&talent_ids, &properties, &achieved).unwrap();
+    c.bench_function("game_session_pre_rendering", |b| {
+        b.iter(|| {
+            let session = GameSession::new(black_box(result.clone()), emoji_map.clone());
+            black_box(session)
         })
     });
 }
@@ -231,5 +270,5 @@ fn benchmark_condition_parsing(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, benchmark_simulation, benchmark_condition_parsing);
+criterion_group!(benches, benchmark_simulation, benchmark_game_session, benchmark_condition_parsing);
 criterion_main!(benches);
