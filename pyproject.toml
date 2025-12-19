@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "life-restart-core"
-version = "0.1.0"
+version = "0.1.1"
 description = "High-performance life restart simulator core engine written in Rust"
 readme = "README.md"
 license = { text = "MIT" }
