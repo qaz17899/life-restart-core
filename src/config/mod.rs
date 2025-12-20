@@ -413,6 +413,8 @@ pub fn deserialize_judge_config(
         for item in levels_list.iter() {
             levels.push(extract_judge_level(&item)?);
         }
+        // Sort by min descending for O(1) early-return lookup
+        levels.sort_by(|a, b| b.min.cmp(&a.min));
         judge_config.insert(prop, levels);
     }
 

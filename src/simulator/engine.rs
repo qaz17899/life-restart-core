@@ -369,7 +369,7 @@ impl SimulationEngine {
     fn judge_property(&self, prop: &str, value: i32) -> Option<PropertyJudge> {
         let levels = self.judge_config.get(prop)?;
 
-        // Find the matching level (levels should be sorted by min descending)
+        // Levels are sorted by min descending, so first match is the best
         for level in levels {
             if value >= level.min {
                 let progress = (value.min(10).max(0) as f64) / 10.0;
