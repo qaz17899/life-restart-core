@@ -15,9 +15,33 @@ pub use judge::*;
 pub use talent::*;
 
 use crate::error::LifeRestartError;
+use once_cell::sync::Lazy;
 use pyo3::types::{PyAnyMethods, PyDict, PyDictMethods, PyList, PyListMethods};
 use pyo3::Bound;
+use regex::Regex;
 use std::collections::HashMap;
+
+/// Regex for extracting max_triggers from AGE?[...] conditions
+/// Matches patterns like "AGE?[20,30]" and captures the ages list
+static AGE_CONDITION_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"AGE\?\[([0-9,]+)\]").expect("Invalid AGE condition regex")
+});
+
+/// Extract max_triggers from condition string
+/// 
+/// Original JS logic (condition.js extractMaxTriggers):
+/// - If condition contains AGE?[...], count the number of ages
+/// - Otherwise return 1
+fn extract_max_triggers_from_condition(condition: &Option<String>) -> i32 {
+    if let Some(cond) = condition {
+        if let Some(caps) = AGE_CONDITION_RE.captures(cond) {
+            if let Some(ages_str) = caps.get(1) {
+                return ages_str.as_str().split(',').count() as i32;
+            }
+        }
+    }
+    1
+}
 
 /// Helper to get attribute from either dict or object
 fn get_attr<'py>(obj: &Bound<'py, pyo3::PyAny>, name: &str) -> pyo3::PyResult<Bound<'py, pyo3::PyAny>> {
@@ -72,10 +96,14 @@ fn extract_talent(obj: &Bound<'_, pyo3::PyAny>) -> pyo3::PyResult<TalentConfig> 
     let name: String = get_attr(obj, "name")?.extract()?;
     let description: String = get_attr(obj, "description")?.extract()?;
     let grade: i32 = get_attr_opt(obj, "grade").and_then(|v| v.extract().ok()).unwrap_or(0);
-    let max_triggers: i32 = get_attr_opt(obj, "max_triggers").and_then(|v| v.extract().ok()).unwrap_or(1);
     let condition: Option<String> = get_attr_opt(obj, "condition").and_then(|v| v.extract().ok());
     let exclusive: bool = get_attr_opt(obj, "exclusive").and_then(|v| v.extract().ok()).unwrap_or(false);
     let status: i32 = get_attr_opt(obj, "status").and_then(|v| v.extract().ok()).unwrap_or(0);
+
+    // Calculate max_triggers from condition (like original JS extractMaxTriggers)
+    // If JSON has explicit max_triggers, use it; otherwise calculate from AGE?[...] condition
+    let json_max_triggers: Option<i32> = get_attr_opt(obj, "max_triggers").and_then(|v| v.extract().ok());
+    let max_triggers = json_max_triggers.unwrap_or_else(|| extract_max_triggers_from_condition(&condition));
 
     // Extract effect
     let effect = if let Some(effect_obj) = get_attr_opt(obj, "effect") {
@@ -427,4 +455,51 @@ fn extract_judge_level(obj: &Bound<'_, pyo3::PyAny>) -> pyo3::PyResult<JudgeLeve
     let text: String = get_attr(obj, "text")?.extract()?;
 
     Ok(JudgeLevel { min, grade, text })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_max_triggers_single_age() {
+        // AGE?[30] should return 1
+        let condition = Some("AGE?[30]".to_string());
+        assert_eq!(extract_max_triggers_from_condition(&condition), 1);
+    }
+
+    #[test]
+    fn test_extract_max_triggers_multiple_ages() {
+        // AGE?[20,30] should return 2
+        let condition = Some("AGE?[20,30]".to_string());
+        assert_eq!(extract_max_triggers_from_condition(&condition), 2);
+
+        // AGE?[10,20,30,40,50] should return 5
+        let condition = Some("AGE?[10,20,30,40,50]".to_string());
+        assert_eq!(extract_max_triggers_from_condition(&condition), 5);
+    }
+
+    #[test]
+    fn test_extract_max_triggers_complex_condition() {
+        // (AGE?[100])&(TMS>99) should return 1
+        let condition = Some("(AGE?[100])&(TMS>99)".to_string());
+        assert_eq!(extract_max_triggers_from_condition(&condition), 1);
+    }
+
+    #[test]
+    fn test_extract_max_triggers_no_age_condition() {
+        // CHR>5 should return 1
+        let condition = Some("CHR>5".to_string());
+        assert_eq!(extract_max_triggers_from_condition(&condition), 1);
+
+        // None should return 1
+        assert_eq!(extract_max_triggers_from_condition(&None), 1);
+    }
+
+    #[test]
+    fn test_extract_max_triggers_blue_pill() {
+        // 藍色膠囊: AGE?[20,30] should return 2
+        let condition = Some("AGE?[20,30]".to_string());
+        assert_eq!(extract_max_triggers_from_condition(&condition), 2);
+    }
 }

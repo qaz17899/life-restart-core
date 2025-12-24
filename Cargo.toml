@@ -1,6 +1,6 @@
 [package]
 name = "life-restart-core"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 description = "High-performance life restart simulator core engine"
 license = "MIT"
@@ -25,6 +25,7 @@ once_cell = "1.20"
 parking_lot = "0.12"
 smallvec = { version = "1.13", features = ["union"] }
 ahash = "0.8"
+regex = "1.11"
 
 [dev-dependencies]
 proptest = "1.5"

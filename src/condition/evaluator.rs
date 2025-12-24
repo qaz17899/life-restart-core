@@ -100,6 +100,12 @@ impl PropertyState {
             b"LIF" => PropertyValue::Integer(self.lif),
             b"TLT" => PropertyValue::List(&self.tlt),
             b"EVT" => PropertyValue::List(&self.evt),
+            // Persistent properties (cross-session)
+            b"TMS" => PropertyValue::Integer(self.tms),
+            b"AEVT" => PropertyValue::List(&self.aevt),
+            b"ATLT" => PropertyValue::List(&self.atlt),
+            b"CACHV" => PropertyValue::Integer(self.cachv),
+            // Min/Max tracking
             b"LAGE" => PropertyValue::Integer(self.lage.min(self.age)),
             b"LCHR" => PropertyValue::Integer(self.lchr.min(self.chr)),
             b"LINT" => PropertyValue::Integer(self.lint.min(self.int)),

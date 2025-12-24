@@ -190,6 +190,7 @@ fn benchmark_simulation(c: &mut Criterion) {
                 black_box(&talent_ids),
                 black_box(&properties),
                 black_box(&achieved),
+                None,
             );
             black_box(result)
         })
@@ -219,6 +220,7 @@ fn benchmark_game_session(c: &mut Criterion) {
                 black_box(&talent_ids),
                 black_box(&properties),
                 black_box(&achieved),
+                None,
             ).unwrap();
             let session = GameSession::new(result, emoji_map.clone());
             black_box(session)
@@ -226,7 +228,7 @@ fn benchmark_game_session(c: &mut Criterion) {
     });
 
     // Benchmark just GameSession creation (pre-rendering overhead)
-    let result = engine.simulate(&talent_ids, &properties, &achieved).unwrap();
+    let result = engine.simulate(&talent_ids, &properties, &achieved, None).unwrap();
     c.bench_function("game_session_pre_rendering", |b| {
         b.iter(|| {
             let session = GameSession::new(black_box(result.clone()), emoji_map.clone());

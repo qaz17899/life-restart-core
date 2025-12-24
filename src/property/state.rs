@@ -21,6 +21,12 @@ pub struct PropertyState {
     pub tlt: Vec<i32>, // 天賦列表 (Talents) - typically 3-10 items
     pub evt: Vec<i32>, // 事件列表 (Events) - typically 50-200 items
 
+    // Persistent properties (cross-session, from database)
+    pub tms: i32,        // 重開次數 (Times/Play Count)
+    pub aevt: Vec<i32>,  // 歷史事件 (Achieved Events - all events ever triggered)
+    pub atlt: Vec<i32>,  // 歷史天賦 (Achieved Talents - all talents ever selected)
+    pub cachv: i32,      // 成就數量 (Count of Achievements)
+
     // Minimum value tracking
     pub lage: i32,
     pub lchr: i32,
@@ -53,6 +59,11 @@ impl PropertyState {
             // Pre-allocate with typical capacities to avoid reallocations
             tlt: Vec::with_capacity(10),
             evt: Vec::with_capacity(128),
+            // Initialize persistent properties to default values
+            tms: 0,
+            aevt: Vec::new(),
+            atlt: Vec::new(),
+            cachv: 0,
             // Initialize min/max to extreme values
             lage: i32::MAX,
             lchr: i32::MAX,
@@ -70,6 +81,28 @@ impl PropertyState {
 
         // Initialize min/max with current values
         state.init_min_max();
+        state
+    }
+
+    /// Create a new PropertyState with persistent properties
+    #[inline]
+    pub fn new_with_persistent(
+        chr: i32,
+        int: i32,
+        str_: i32,
+        mny: i32,
+        spr: i32,
+        lif: i32,
+        tms: i32,
+        aevt: Vec<i32>,
+        atlt: Vec<i32>,
+        cachv: i32,
+    ) -> Self {
+        let mut state = Self::new(chr, int, str_, mny, spr, lif);
+        state.tms = tms;
+        state.aevt = aevt;
+        state.atlt = atlt;
+        state.cachv = cachv;
         state
     }
 

@@ -1,4 +1,4 @@
-//! Property tests for simulator module
+﻿//! Property tests for simulator module
 //!
 //! Feature: life-restart-rust
 //! Property 9: Simulation Termination
@@ -10,9 +10,9 @@ use std::collections::{HashMap, HashSet};
 use crate::config::{AgeConfig, EventConfig, EventEffect, TalentConfig};
 use crate::simulator::SimulationEngine;
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ?��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��???
 // Strategy generators for property tests
-// ═══════════════════════════════════════════════════════════════════════════
+// ?��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��???
 
 /// Generate initial properties
 fn initial_properties_strategy() -> impl Strategy<Value = HashMap<String, i32>> {
@@ -131,9 +131,9 @@ fn create_test_engine() -> SimulationEngine {
     SimulationEngine::new(talents, events, ages, achievements, judge_config)
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ?��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��???
 // Property Tests
-// ═══════════════════════════════════════════════════════════════════════════
+// ?��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��???
 
 proptest! {
     /// Property 9: Simulation should terminate when LIF < 1
@@ -146,7 +146,7 @@ proptest! {
         let talent_ids = vec![1];
         let achieved: HashSet<i32> = HashSet::new();
 
-        let result = engine.simulate(&talent_ids, &properties, &achieved);
+        let result = engine.simulate(&talent_ids, &properties, &achieved, None);
         prop_assert!(result.is_ok(), "Simulation should complete without error");
 
         let result = result.unwrap();
@@ -169,7 +169,7 @@ proptest! {
         let talent_ids = vec![1];
         let achieved: HashSet<i32> = HashSet::new();
 
-        let result = engine.simulate(&talent_ids, &properties, &achieved).unwrap();
+        let result = engine.simulate(&talent_ids, &properties, &achieved, None).unwrap();
 
         // Simulation should terminate within reasonable bounds (max 200 years)
         prop_assert!(
@@ -189,7 +189,7 @@ proptest! {
         let talent_ids = vec![1];
         let achieved: HashSet<i32> = HashSet::new();
 
-        let result = engine.simulate(&talent_ids, &properties, &achieved).unwrap();
+        let result = engine.simulate(&talent_ids, &properties, &achieved, None).unwrap();
 
         // Summary should have a total score
         // The score should be non-negative (since all max values are >= 0)
@@ -210,7 +210,7 @@ proptest! {
         let talent_ids = vec![1];
         let achieved: HashSet<i32> = HashSet::new();
 
-        let result = engine.simulate(&talent_ids, &properties, &achieved).unwrap();
+        let result = engine.simulate(&talent_ids, &properties, &achieved, None).unwrap();
 
         // If simulation ran for at least one year, events should be recorded
         if !result.trajectory.is_empty() {
@@ -237,7 +237,7 @@ mod tests {
         let talent_ids = vec![1];
         let achieved: HashSet<i32> = HashSet::new();
 
-        let result = engine.simulate(&talent_ids, &properties, &achieved);
+        let result = engine.simulate(&talent_ids, &properties, &achieved, None);
         assert!(result.is_ok());
 
         let result = result.unwrap();
@@ -246,10 +246,10 @@ mod tests {
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ?��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��???
 // Property 1: Return Type Consistency
 // Validates: Requirements 1.1, 5.4
-// ═══════════════════════════════════════════════════════════════════════════
+// ?��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��??��???
 
 proptest! {
     /// Property 1: simulate returns SimulationResult with consistent structure
@@ -262,7 +262,7 @@ proptest! {
         let talent_ids = vec![1];
         let achieved: HashSet<i32> = HashSet::new();
 
-        let result = engine.simulate(&talent_ids, &properties, &achieved);
+        let result = engine.simulate(&talent_ids, &properties, &achieved, None);
         prop_assert!(result.is_ok(), "Simulation should return Ok");
 
         let result = result.unwrap();
@@ -304,7 +304,7 @@ proptest! {
         let talent_ids = vec![1];
         let achieved: HashSet<i32> = HashSet::new();
 
-        let result = engine.simulate(&talent_ids, &properties, &achieved).unwrap();
+        let result = engine.simulate(&talent_ids, &properties, &achieved, None).unwrap();
         let emoji_map = Arc::new(default_emoji_map());
 
         // GameSession::new should not panic
@@ -337,7 +337,7 @@ proptest! {
         let talent_ids = vec![1];
         let achieved: HashSet<i32> = HashSet::new();
 
-        let result = engine.simulate(&talent_ids, &properties, &achieved).unwrap();
+        let result = engine.simulate(&talent_ids, &properties, &achieved, None).unwrap();
         let emoji_map = Arc::new(default_emoji_map());
         let session = GameSession::new(result.clone(), emoji_map);
 

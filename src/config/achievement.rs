@@ -10,7 +10,7 @@ pub struct AchievementConfig {
     pub description: String,
     #[serde(default)]
     pub grade: i32,
-    /// Opportunity: "START", "TRAJECTORY", "SUMMARY"
+    /// Opportunity: "START", "TRAJECTORY", "SUMMARY", "END"
     pub opportunity: String,
     pub condition: String,
 }
@@ -21,6 +21,7 @@ pub enum Opportunity {
     Start,
     Trajectory,
     Summary,
+    End,
 }
 
 impl Opportunity {
@@ -29,6 +30,7 @@ impl Opportunity {
             "START" => Some(Opportunity::Start),
             "TRAJECTORY" => Some(Opportunity::Trajectory),
             "SUMMARY" => Some(Opportunity::Summary),
+            "END" => Some(Opportunity::End),
             _ => None,
         }
     }

@@ -15,7 +15,7 @@ pub mod simulator;
 pub mod talent;
 
 use crate::error::LifeRestartError;
-use crate::simulator::{default_emoji_map, GameSession, SimulationEngine};
+use crate::simulator::{default_emoji_map, GameSession, PersistentProperties, SimulationEngine};
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
 use pyo3::types::PyDict;
@@ -115,10 +115,15 @@ fn is_config_initialized() -> bool {
 /// # Raises
 /// RuntimeError if `init_config` was not called first
 #[pyfunction]
+#[pyo3(signature = (talent_ids, properties, achieved_ids, tms=0, aevt=None, atlt=None, cachv=0))]
 fn simulate_full_life(
     talent_ids: Vec<i32>,
     properties: HashMap<String, i32>,
     achieved_ids: HashSet<i32>,
+    tms: i32,
+    aevt: Option<Vec<i32>>,
+    atlt: Option<Vec<i32>>,
+    cachv: i32,
 ) -> PyResult<GameSession> {
     // Get cached config
     let config_arc = CACHED_CONFIG
@@ -132,10 +137,22 @@ fn simulate_full_life(
 
     let config = config_arc.read();
 
+    // Build persistent properties
+    let persistent = if tms > 0 || aevt.is_some() || atlt.is_some() || cachv > 0 {
+        Some(PersistentProperties {
+            tms,
+            aevt: aevt.unwrap_or_default(),
+            atlt: atlt.unwrap_or_default(),
+            cachv,
+        })
+    } else {
+        None
+    };
+
     // Run simulation
     let result = config
         .engine
-        .simulate(&talent_ids, &properties, &achieved_ids)
+        .simulate(&talent_ids, &properties, &achieved_ids, persistent.as_ref())
         .map_err(LifeRestartError::from)?;
 
     // Wrap in GameSession with pre-rendering
@@ -153,6 +170,10 @@ fn simulate_full_life(
 /// * `talent_ids` - List of selected talent IDs
 /// * `properties` - Initial property allocation {CHR, INT, STR, MNY}
 /// * `achieved_ids` - Set of already achieved achievement IDs
+/// * `tms` - Play count (TMS)
+/// * `aevt` - Historical events (AEVT)
+/// * `atlt` - Historical talents (ATLT)
+/// * `cachv` - Achievement count (CACHV)
 ///
 /// # Returns
 /// A Python awaitable that resolves to a GameSession object
@@ -162,15 +183,20 @@ fn simulate_full_life(
 ///
 /// # Example (Python)
 /// ```python
-/// session = await simulate_async([1, 2, 3], {"CHR": 5, "INT": 5}, set())
+/// session = await simulate_async([1, 2, 3], {"CHR": 5, "INT": 5}, set(), tms=10)
 /// print(session.total_years)
 /// ```
 #[pyfunction]
+#[pyo3(signature = (talent_ids, properties, achieved_ids, tms=0, aevt=None, atlt=None, cachv=0))]
 fn simulate_async<'py>(
     py: Python<'py>,
     talent_ids: Vec<i32>,
     properties: HashMap<String, i32>,
     achieved_ids: HashSet<i32>,
+    tms: i32,
+    aevt: Option<Vec<i32>>,
+    atlt: Option<Vec<i32>>,
+    cachv: i32,
 ) -> PyResult<Bound<'py, PyAny>> {
     // Get cached config before entering async context
     let config_arc = CACHED_CONFIG
@@ -182,6 +208,18 @@ fn simulate_async<'py>(
         })?
         .clone();
 
+    // Build persistent properties
+    let persistent = if tms > 0 || aevt.is_some() || atlt.is_some() || cachv > 0 {
+        Some(PersistentProperties {
+            tms,
+            aevt: aevt.unwrap_or_default(),
+            atlt: atlt.unwrap_or_default(),
+            cachv,
+        })
+    } else {
+        None
+    };
+
     // Use pyo3-async-runtimes to convert Rust Future to Python awaitable
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
         // Run CPU-intensive simulation in a blocking thread
@@ -192,7 +230,7 @@ fn simulate_async<'py>(
             // Run simulation
             let sim_result = config
                 .engine
-                .simulate(&talent_ids, &properties, &achieved_ids)
+                .simulate(&talent_ids, &properties, &achieved_ids, persistent.as_ref())
                 .map_err(LifeRestartError::from)?;
 
             // Wrap in GameSession with pre-rendering

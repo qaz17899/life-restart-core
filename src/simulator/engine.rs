@@ -16,6 +16,26 @@ use std::collections::{HashMap, HashSet};
 pub const CONTENT_TYPE_TALENT: &str = "TLT";
 pub const CONTENT_TYPE_EVENT: &str = "EVT";
 
+/// Persistent properties (cross-session data from database)
+#[derive(Debug, Clone)]
+pub struct PersistentProperties {
+    pub tms: i32,        // 重開次數 (Times/Play Count)
+    pub aevt: Vec<i32>,  // 歷史事件 (all events ever triggered)
+    pub atlt: Vec<i32>,  // 歷史天賦 (all talents ever selected)
+    pub cachv: i32,      // 成就數量 (count of achievements)
+}
+
+impl Default for PersistentProperties {
+    fn default() -> Self {
+        Self {
+            tms: 0,
+            aevt: Vec::new(),
+            atlt: Vec::new(),
+            cachv: 0,
+        }
+    }
+}
+
 /// Year content entry
 #[derive(Debug, Clone)]
 pub struct YearContent {
@@ -104,19 +124,35 @@ impl SimulationEngine {
         talent_ids: &[i32],
         properties: &HashMap<String, i32>,
         achieved_ids: &HashSet<i32>,
+        persistent: Option<&PersistentProperties>,
     ) -> Result<SimulationResult> {
         // Apply talent replacements
         let (final_talents, replacements) = apply_replacements(talent_ids, &self.talents);
 
-        // Create initial state
-        let mut state = PropertyState::new(
-            *properties.get("CHR").unwrap_or(&0),
-            *properties.get("INT").unwrap_or(&0),
-            *properties.get("STR").unwrap_or(&0),
-            *properties.get("MNY").unwrap_or(&0),
-            5, // Default SPR
-            1, // Default LIF
-        );
+        // Create initial state with persistent properties
+        let mut state = if let Some(p) = persistent {
+            PropertyState::new_with_persistent(
+                *properties.get("CHR").unwrap_or(&0),
+                *properties.get("INT").unwrap_or(&0),
+                *properties.get("STR").unwrap_or(&0),
+                *properties.get("MNY").unwrap_or(&0),
+                5, // Default SPR
+                1, // Default LIF
+                p.tms,
+                p.aevt.clone(),
+                p.atlt.clone(),
+                p.cachv,
+            )
+        } else {
+            PropertyState::new(
+                *properties.get("CHR").unwrap_or(&0),
+                *properties.get("INT").unwrap_or(&0),
+                *properties.get("STR").unwrap_or(&0),
+                *properties.get("MNY").unwrap_or(&0),
+                5, // Default SPR
+                1, // Default LIF
+            )
+        };
 
         // Set talents - direct push without contains check (talents are unique)
         for talent_id in &final_talents {
