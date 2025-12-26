@@ -419,7 +419,18 @@ impl SimulationEngine {
             }
         }
 
-        None
+        // If no match (value < all min thresholds), return the last level (lowest threshold)
+        // This ensures negative values still get a "地獄" rating instead of None
+        levels.last().map(|level| {
+            let progress = (value.min(10).max(0) as f64) / 10.0;
+            PropertyJudge {
+                property_type: prop.to_string(),
+                value,
+                grade: level.grade,
+                text: level.text.clone(),
+                progress,
+            }
+        })
     }
 }
 
