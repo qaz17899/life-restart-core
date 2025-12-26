@@ -46,9 +46,13 @@ pub struct PropertyState {
 
 impl PropertyState {
     /// Create a new PropertyState with initial values
+    ///
+    /// Note: min/max values are initialized to extreme values (i32::MAX/MIN)
+    /// and will be updated naturally when apply_talent_effect or change() is called.
+    /// This ensures correct tracking even when talent effects reduce stats below initial values.
     #[inline]
     pub fn new(chr: i32, int: i32, str_: i32, mny: i32, spr: i32, lif: i32) -> Self {
-        let mut state = Self {
+        Self {
             age: -1,
             chr,
             int,
@@ -65,6 +69,8 @@ impl PropertyState {
             atlt: Vec::new(),
             cachv: 0,
             // Initialize min/max to extreme values
+            // Do NOT call init_min_max() here - let apply_talent_effect update these naturally
+            // This ensures hint = max(i32::MIN, -5) = -5 instead of max(0, -5) = 0
             lage: i32::MAX,
             lchr: i32::MAX,
             lint: i32::MAX,
@@ -77,11 +83,7 @@ impl PropertyState {
             hstr: i32::MIN,
             hmny: i32::MIN,
             hspr: i32::MIN,
-        };
-
-        // Initialize min/max with current values
-        state.init_min_max();
-        state
+        }
     }
 
     /// Create a new PropertyState with persistent properties
@@ -104,24 +106,6 @@ impl PropertyState {
         state.atlt = atlt;
         state.cachv = cachv;
         state
-    }
-
-    /// Initialize min/max tracking with current values
-    #[inline]
-    fn init_min_max(&mut self) {
-        self.lage = self.age;
-        self.lchr = self.chr;
-        self.lint = self.int;
-        self.lstr = self.str_;
-        self.lmny = self.mny;
-        self.lspr = self.spr;
-
-        self.hage = self.age;
-        self.hchr = self.chr;
-        self.hint = self.int;
-        self.hstr = self.str_;
-        self.hmny = self.mny;
-        self.hspr = self.spr;
     }
 
     /// Change a property value by delta - optimized with byte comparison
@@ -278,17 +262,37 @@ mod tests {
     fn test_min_max_tracking() {
         let mut state = PropertyState::new(5, 5, 5, 5, 5, 1);
 
-        // Increase
+        // Initially min/max are extreme values (not initialized with current values)
+        // This allows talent effects to properly track negative values
+        assert_eq!(state.hchr, i32::MIN);
+        assert_eq!(state.lchr, i32::MAX);
+
+        // First change updates min/max
         state.change("CHR", 5);
         assert_eq!(state.chr, 10);
         assert_eq!(state.hchr, 10);
-        assert_eq!(state.lchr, 5);
+        assert_eq!(state.lchr, 10); // First change sets both min and max
 
         // Decrease
         state.change("CHR", -8);
         assert_eq!(state.chr, 2);
         assert_eq!(state.hchr, 10);
         assert_eq!(state.lchr, 2);
+    }
+
+    #[test]
+    fn test_negative_talent_effect_tracking() {
+        // This test verifies the fix for hint tracking with negative talent effects
+        // Before fix: init_min_max() set hint = 0, so hint = max(0, -5) = 0 (wrong)
+        // After fix: hint starts at i32::MIN, so hint = max(i32::MIN, -5) = -5 (correct)
+        let mut state = PropertyState::new(0, 0, 0, 0, 0, 1);
+
+        // Simulate talent effect: INT -5
+        state.change("INT", -5);
+
+        assert_eq!(state.int, -5);
+        assert_eq!(state.hint, -5); // Should be -5, not 0
+        assert_eq!(state.lint, -5);
     }
 
     #[test]

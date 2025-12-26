@@ -1,6 +1,6 @@
 [package]
 name = "life-restart-core"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 description = "High-performance life restart simulator core engine"
 license = "MIT"
